@@ -6,12 +6,14 @@
 
 module px_8gvtdr_hr_hdram #(
     parameter DQ_WIDTH = 16,
-    parameter ADDR_WIDTH = 24,
-    parameter BANK_WIDTH = 4,
+    parameter ADDR_WIDTH = 7,
+    parameter BANK_WIDTH = 1, // 4 (Final)
     parameter DM_WIDTH = 2,
     parameter NUM_BANKS = (1<<BANK_WIDTH),
-    parameter ROW_BITS = 14,
-    parameter COL_BITS = 10,
+    parameter ROW_BITS = 3, // 14 (Final)
+    parameter COL_BITS = 4, // 10 (Final)
+    parameter ROW_POSE = 7, // Row Position End
+    parameter COL_POSE = 4, // Column Position End
     parameter SIM_SIZE = NUM_BANKS*(1<<COL_BITS) // SIM
 ) (
     // Clocks
@@ -24,6 +26,7 @@ module px_8gvtdr_hr_hdram #(
     input wire cas_n,
     input wire we_n,
     input wire cke,
+    input wire mddr_n, // Mode Double Data Rate (Active-Low)
 
     // Address
     input wire [ADDR_WIDTH-1:0] addr,
@@ -34,6 +37,7 @@ module px_8gvtdr_hr_hdram #(
     input wire [DM_WIDTH-1:0] dm,
     output reg tdr_a, // TDR Active
     output reg async_bs, // Async Bit Sent
+    input wire backn, // Bit 1 Acknowledged
     output reg barm // Bit Arm, 1 whenever bits have started being sent
 );
     reg [DQ_WIDTH-1:0] mem [0:SIM_SIZE-1];
@@ -48,6 +52,11 @@ module px_8gvtdr_hr_hdram #(
     reg [ROW_BITS-1:0] active_row [0:NUM_BANKS-1];
     reg row_open [0:NUM_BANKS-1];
 
+    wire [ROW_BITS-1:0] row;
+    wire [COL_BITS-1:0] col;
+
+    assign row = addr[ROW_POSE-1:COL_POSE];
+    assign col = addr[COL_POSE-1:0];
     assign dq = dq_drive ? dq_out : {DQ_WIDTH{1'bz}};
 
     // Timing
@@ -59,6 +68,8 @@ module px_8gvtdr_hr_hdram #(
     reg [2:0] bit_count;
 
     reg cas_fire;
+
+    reg tdr_mode;
 
     integer i;
     integer w;
@@ -76,16 +87,18 @@ module px_8gvtdr_hr_hdram #(
         end else if (!cs_n) begin
             if (!ras_n && cas_n && we_n) begin // Active CMD
                 row_open[ba] <= 1'b1;
-                active_row[ba] <= addr[ROW_BITS-1:0];
+                active_row[ba] <= row;
                 trcd_count <= trcd; // start timing
             end else if (ras_n && !cas_n && we_n && row_open[ba] && trcd_count == 0) begin // Read CMD
                 cas_delay <= tcas;
                 dq_drive <= 0;
                 bit_count <= 0;
             end else if (ras_n && !cas_n && !we_n && row_open[ba] && trcd_count == 0) begin // Write CMD
+                dq_next = mem[{ba, row, col}];
                 for (w = 0; w < (DQ_WIDTH/8); w=w+1)
                     if (!dm[w]) 
-                        mem[{ba, addr[COL_BITS-1:0]}] <= dq[w*8 +: 8];
+                        dq_next[w*8 +: 8] = dq[w*8 +: 8];
+                mem[{ba, row, col}] <= dq_next;
             end else if (!ras_n && cas_n && !we_n) begin // Precharge CMD
                 row_open[ba] <= 1'b0;
                 trp_count <= trp;
@@ -98,6 +111,7 @@ module px_8gvtdr_hr_hdram #(
         if (trp_count > 0) trp_count <= trp_count - 1;
 
         cas_fire <= (cas_delay - 1 == 1);
+        tdr_mode <= mddr_n;
         if (cas_delay > 0) begin
             cas_delay <= cas_delay - 1;
         end
@@ -112,25 +126,23 @@ module px_8gvtdr_hr_hdram #(
             barm <= 0;
         end else if (cas_fire && row_open[ba]) begin
             dq_drive <= 1;
-            dq_out <= mem[{ba, addr[COL_BITS-1:0]}];
+            dq_out <= mem[{ba, row, col}];
             bit_count <= 1;
-            barm <= 1;
-            dq_next = mem[{ba, addr[COL_BITS-1:0]}];
-            $display("Sync bit: 0x%h", dq_next);
+            barm <= 1; 
             tdr_req = 1;
         end
     end
 
     always @(*) begin
-        if (cas_fire && tdr_req && reset_n) begin
-            dq_next1 = mem[{ba, addr[COL_BITS-1:0]}];
-            $display("Async Bit: 0x%h", dq_next1);
+        if (cas_fire && tdr_req && reset_n && mddr_n) begin
+            dq_next = mem[{ba, row, col + 2'd1}];
             async_bs_next = 1;
             bit_count = 2;
             tdr_req = 0;
         end else if (reset_n && cas_delay == 0 && async_bs_next) begin
-            if (dq == dq_next) begin // Data is stable and sent
-                dq_out = dq_next1;
+            if (backn) begin // Data is Acknowledged
+                $display("Bit Ackn @%0t", $time);
+                dq_out = dq_next;
                 async_bs = async_bs_next;
                 async_bs_next = 0;
             end
@@ -143,18 +155,26 @@ module px_8gvtdr_hr_hdram #(
 
         if (!reset_n) begin
             tdr_a <= 0;
-        end else if (cas_fire) begin
+            barm <= 0;
+        end else if (cas_fire && tdr_mode && backn) begin // TDR Mode
             tdr_a <= 0;
 
             if (tdr_req == 0 && bit_count > 1) begin // Send bit 3
                 bit_count <= 3;
-                dq_out <= mem[{ba, addr[COL_BITS-1:0]}];
+                dq_out <= mem[{ba, row, col + 2'd2}];
                 tdr_a <= 1;
                 dq_drive <= 0;
-            end else if (tdr_req == 1 && bit_count >= 1) begin
+            end else begin // DO NOT SEND ANYTHING
                 tdr_a <= 0;
                 dq_drive <= 0;
             end
+
+            barm <= 0;
+        end else if (cas_fire && !tdr_mode) begin // DDR Mode, Send only bit 2
+            tdr_a <= 0;
+            bit_count <= 2;
+            dq_out <= mem[{ba, row, col + 2'd1}];
+            dq_drive <= 0;
 
             barm <= 0;
         end

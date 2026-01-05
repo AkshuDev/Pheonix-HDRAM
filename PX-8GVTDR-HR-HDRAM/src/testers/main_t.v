@@ -6,7 +6,18 @@
 
 `timescale 1ns/1ps
 
-module tb_px_8gvtdr_hr_hdram;
+module tb_px_8gvtdr_hr_hdram #(
+    parameter DQ_WIDTH = 16,
+    parameter ADDR_WIDTH = 7,
+    parameter BANK_WIDTH = 1, // 4 (Final)
+    parameter DM_WIDTH = 2,
+    parameter NUM_BANKS = (1<<BANK_WIDTH),
+    parameter ROW_BITS = 3, // 14 (Final)
+    parameter COL_BITS = 4, // 10 (Final)
+    parameter ROW_POSE = 7, // Row Position End
+    parameter COL_POSE = 4, // Column Position End
+    parameter SIM_SIZE = NUM_BANKS*(1<<COL_BITS) // SIM
+);
 
     // Clock with jitter
     reg clk = 0;
@@ -21,18 +32,20 @@ module tb_px_8gvtdr_hr_hdram;
     // Signals
     reg reset_n;
     reg cs_n, ras_n, cas_n, we_n, cke;
-    reg [23:0] addr;
-    reg [3:0] ba;
-    wire [15:0] dq;
-    reg [1:0] dm;
+    reg [ADDR_WIDTH-1:0] addr;
+    reg [BANK_WIDTH-1:0] ba;
+    wire [DQ_WIDTH-1:0] dq;
+    reg [DM_WIDTH-1:0] dm;
 
     wire tdr_a;
     wire async_bs;
     wire bit_arm;
+    reg ddr_mode_n;
+    reg bit_ackn;
 
-    reg [15:0] dq_drv;
+    reg [DQ_WIDTH-1:0] dq_drv;
     reg dq_oe;
-    assign dq = dq_oe ? dq_drv : 16'hzzzz;
+    assign dq = dq_oe ? dq_drv : {DQ_WIDTH{1'hz}};
 
     // DUT
     px_8gvtdr_hr_hdram dut (
@@ -49,11 +62,63 @@ module tb_px_8gvtdr_hr_hdram;
         .dm(dm),
         .tdr_a(tdr_a),
         .async_bs(async_bs),
-        .barm(bit_arm)
+        .barm(bit_arm),
+        .mddr_n(ddr_mode_n),
+        .backn(bit_ackn)
     );
 
     // Golden memory
-    reg [15:0] golden_mem [0:4095];
+    reg [DQ_WIDTH-1:0] golden_mem [0:SIM_SIZE-1];
+
+    // Reading TDR setup
+    reg read_start;
+    reg read_done;
+    integer read_bursts;
+    reg [DQ_WIDTH-1:0] read_samples [0:2];
+    reg read_bit_armed;
+    reg [BANK_WIDTH-1:0] read_bank;
+    reg [COL_BITS-1:0] read_col;
+
+    always @(posedge clk) begin
+        $display("Read Start: %0d Read Done: %0d Bit Arm: %0d Read bit armed: %0d @%0t", read_start, read_done, bit_arm, read_bit_armed, $time);
+        if (read_start && !read_done) begin
+            if (bit_arm && !read_bit_armed) begin
+                read_samples[0] = dq;
+                bit_ackn = 1;
+                read_bit_armed = 1;
+                read_bursts = 1;
+                $display("Debug: Rising edge burst %0d -> bank=%0d col=%0d data=0x%h @%0t", read_bursts, read_bank, read_col, read_samples[0], $time);
+            end
+        end
+    end
+
+    always @(negedge clk) begin
+        if (read_start && !read_done) begin
+            if (read_bit_armed && tdr_a) begin
+                read_samples[2] = dq;
+                bit_ackn = 0;
+                read_bit_armed = 0;
+                read_bursts = read_bursts + 1;
+                read_done = 1;
+                $display("Debug: Falling edge burst %0d -> bank=%0d col=%0d data=0x%h mode=TDR @%0t", read_bursts, read_bank, read_col, read_samples[2], $time);
+            end else if (read_bit_armed && !tdr_a) begin
+                read_bursts = read_bursts + 1;
+                read_bit_armed = 0;
+                read_done = 1;
+                $display("Debug: Falling edge -> bank=%0d col=%0d mode=DDR @%0t", read_bank, read_col, $time);
+            end
+        end
+    end
+
+    always @(*) begin
+        if (read_start && !read_done) begin
+            if (read_bit_armed && async_bs) begin
+                read_samples[1] = dq;
+                read_bursts = read_bursts + 1;
+                $display("Debug: Async burst 50d -> bank=%0d col=%0d data=0x%h @%0t", read_bursts, read_bank, read_col, read_samples[1], $time);
+            end
+        end
+    end
 
     // Reset
     initial begin
@@ -67,7 +132,7 @@ module tb_px_8gvtdr_hr_hdram;
     end
 
     // IC commands
-    task activate(input [3:0] bank, input [13:0] row);
+    task activate(input [BANK_WIDTH-1:0] bank, input [ROW_BITS-1:0] row);
         begin
             @(posedge clk);
             ba <= bank;
@@ -79,7 +144,7 @@ module tb_px_8gvtdr_hr_hdram;
         end
     endtask
 
-    task write_mem(input [3:0] bank, input [9:0] col, input [15:0] data);
+    task write_mem(input [BANK_WIDTH-1:0] bank, input [ROW_BITS-1:0] row, input [COL_BITS-1:0] col, input [DQ_WIDTH-1:0] data);
         begin
             repeat ($urandom_range(1,3)) @(posedge clk);
             golden_mem[{bank,col}] = data;
@@ -93,61 +158,45 @@ module tb_px_8gvtdr_hr_hdram;
         end
     endtask
 
-    task read_mem(input [3:0] bank, input [9:0] col);
-        reg [15:0] sampled;
-        integer beat;
-        reg bit_armed;
+    task read_mem(input [BANK_WIDTH-1:0] bank, input [ROW_BITS-1:0] row, input [COL_BITS-1:0] col);
         begin
             repeat ($urandom_range(1,4)) @(posedge clk);
 
             @(posedge clk);
-            ba <= bank; addr <= col; cs_n <= 0; ras_n <= 1; cas_n <= 0; we_n <= 1;
+            ba <= bank; addr <= col; cs_n <= 0; ras_n <= 1; cas_n <= 0; we_n <= 1; ddr_mode_n <= 1;
             @(posedge clk);
             cs_n <= 1; cas_n <= 1;
 
-            beat = 0;
-            sampled = 0;
-            bit_armed = 0;
+            read_samples[0] = 0;
+            read_samples[1] = 0;
+            read_samples[2] = 0;
+            bit_ackn = 0;
+            read_bursts = 0;
+            read_bit_armed = 0;
+            read_done = 0;
+            read_bank = bank;
+            read_col = col;
+            read_start = 1;
 
             // Wait for TDR beats
-            while (beat < 3) begin
-                // Async Sampling
-                if (async_bs && bit_armed) begin
-                    sampled = dq;
-                    $display("Debug: Async beat 50d -> bank=%0d col=%0d data=0x%h @%0t", beat, bank, col, sampled, $time);
-                    beat = beat + 1;
-                end
+            wait (read_done || read_bursts >= 3);
 
-                // Rising edge sampling
-                @(posedge clk);
-                if (bit_arm && !bit_armed) begin
-                    sampled = dq;
-                    $display("Debug: Rising edge beat %0d -> bank=%0d col=%0d data=0x%h @%0t", beat, bank, col, sampled, $time);
-                    beat = beat + 1;
-                    bit_armed = 1;
-                end
+            read_start = 0;
+            read_done = 0;
+            bit_ackn = 0;
+            read_bursts = 0;
+            read_bit_armed = 0;
 
-                // Falling edge sampling
-                @(negedge clk);
-                if (tdr_a && bit_armed) begin
-                    sampled = dq;
-                    $display("Debug: Falling edge beat %0d -> bank=%0d col=%0d data=0x%h @%0t", beat, bank, col, sampled, $time);
-                    beat = beat + 1;
-                end else if (bit_armed) begin
-                    bit_armed = 0;
-                end
-            end
-
-            if (sampled !== golden_mem[{bank,col}]) begin
-                $display("Error: Read mismatch bank=%0d col=%0d exp=0x%h got=0x%h @%0t", bank, col, golden_mem[{bank,col}], sampled, $time);
+            if (read_samples[0] !== golden_mem[{bank,row,col}]) begin
+                $display("Error: Read mismatch bank=%0d row=%0d col=%0d exp=0x%h got=0x%h @%0t", bank, row, col, golden_mem[{bank,row,col}], read_samples[0], $time);
                 $stop;
             end else begin
-                $display("Ok: Read bank=%0d col=%0d data=0x%h", bank, col, sampled);
+                $display("Ok: Read bank=%0d col=%0d data=0x%h", bank, col, read_samples[0]);
             end
         end
     endtask
 
-    task precharge(input [3:0] bank);
+    task precharge(input [BANK_WIDTH-1:0] bank);
         begin
             @(posedge clk);
             ba <= bank; cs_n <= 0; ras_n <= 0; cas_n <= 1; we_n <= 0;
@@ -158,18 +207,18 @@ module tb_px_8gvtdr_hr_hdram;
 
     // Stress test
     integer i;
-    reg [15:0] data;
+    reg [DQ_WIDTH-1:0] data;
 
     initial begin
         @(posedge reset_n);
         for (i = 0; i < 50; i=i+1) begin
-            ba = $urandom_range(0,3);
-            addr = $urandom_range(0,1023);
+            ba = $urandom_range(0,BANK_WIDTH-1);
+            addr = $urandom_range(0,127);
             data = $random;
 
-            activate(ba, addr[13:0]);
-            write_mem(ba, addr[9:0], data);
-            read_mem(ba, addr[9:0]);
+            activate(ba, addr[ROW_POSE-1:COL_POSE]);
+            write_mem(ba, addr[ROW_POSE-1:COL_POSE], addr[COL_POSE-1:0], data);
+            read_mem(ba, addr[ROW_POSE-1:COL_POSE], addr[COL_POSE-1:0]);
             precharge(ba);
 
             repeat ($urandom_range(2,8)) @(posedge clk);

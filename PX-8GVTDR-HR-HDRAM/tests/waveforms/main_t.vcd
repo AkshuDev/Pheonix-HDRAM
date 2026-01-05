@@ -1,5 +1,5 @@
 $date
-	Sun Jan  4 21:25:16 2026
+	Mon Jan  5 23:14:31 2026
 $end
 $version
 	Icarus Verilog
@@ -12,357 +12,584 @@ $var wire 16 ! dq [15:0] $end
 $var wire 1 " tdr_a $end
 $var wire 1 # bit_arm $end
 $var wire 1 $ async_bs $end
-$var reg 24 % addr [23:0] $end
-$var reg 4 & ba [3:0] $end
-$var reg 1 ' cas_n $end
-$var reg 1 ( cke $end
-$var reg 1 ) clk $end
-$var reg 1 * cs_n $end
-$var reg 16 + data [15:0] $end
-$var reg 2 , dm [1:0] $end
-$var reg 16 - dq_drv [15:0] $end
-$var reg 1 . dq_oe $end
-$var reg 1 / ras_n $end
-$var reg 1 0 reset_n $end
-$var reg 1 1 we_n $end
-$var real 1 2 base_period $end
-$var integer 32 3 i [31:0] $end
-$var real 1 4 jitter $end
+$var parameter 32 % ADDR_WIDTH $end
+$var parameter 32 & BANK_WIDTH $end
+$var parameter 32 ' COL_BITS $end
+$var parameter 32 ( COL_POSE $end
+$var parameter 32 ) DM_WIDTH $end
+$var parameter 32 * DQ_WIDTH $end
+$var parameter 33 + NUM_BANKS $end
+$var parameter 32 , ROW_BITS $end
+$var parameter 32 - ROW_POSE $end
+$var parameter 69 . SIM_SIZE $end
+$var reg 7 / addr [6:0] $end
+$var reg 1 0 ba $end
+$var reg 1 1 bit_ackn $end
+$var reg 1 2 cas_n $end
+$var reg 1 3 cke $end
+$var reg 1 4 clk $end
+$var reg 1 5 cs_n $end
+$var reg 16 6 data [15:0] $end
+$var reg 1 7 ddr_mode_n $end
+$var reg 2 8 dm [1:0] $end
+$var reg 16 9 dq_drv [15:0] $end
+$var reg 1 : dq_oe $end
+$var reg 1 ; ras_n $end
+$var reg 1 < read_bank $end
+$var reg 1 = read_bit_armed $end
+$var reg 4 > read_col [3:0] $end
+$var reg 1 ? read_done $end
+$var reg 1 @ read_start $end
+$var reg 1 A reset_n $end
+$var reg 1 B we_n $end
+$var real 1 C base_period $end
+$var integer 32 D i [31:0] $end
+$var real 1 E jitter $end
+$var integer 32 F read_bursts [31:0] $end
 $scope module dut $end
-$var wire 24 5 addr [23:0] $end
-$var wire 4 6 ba [3:0] $end
-$var wire 1 ' cas_n $end
-$var wire 1 ( cke $end
-$var wire 1 ) clk $end
-$var wire 1 * cs_n $end
-$var wire 2 7 dm [1:0] $end
-$var wire 16 8 dq [15:0] $end
-$var wire 1 / ras_n $end
-$var wire 1 0 reset_n $end
-$var wire 1 1 we_n $end
-$var parameter 32 9 ADDR_WIDTH $end
-$var parameter 32 : BANK_WIDTH $end
-$var parameter 32 ; COL_BITS $end
-$var parameter 32 < DM_WIDTH $end
-$var parameter 32 = DQ_WIDTH $end
-$var parameter 36 > NUM_BANKS $end
-$var parameter 32 ? ROW_BITS $end
-$var parameter 32 @ SIM_SIZE $end
-$var parameter 32 A tcas $end
-$var parameter 32 B trcd $end
-$var parameter 32 C trp $end
+$var wire 7 G addr [6:0] $end
+$var wire 1 0 ba $end
+$var wire 1 1 backn $end
+$var wire 1 2 cas_n $end
+$var wire 1 3 cke $end
+$var wire 1 4 clk $end
+$var wire 1 5 cs_n $end
+$var wire 2 H dm [1:0] $end
+$var wire 16 I dq [15:0] $end
+$var wire 1 7 mddr_n $end
+$var wire 1 ; ras_n $end
+$var wire 1 A reset_n $end
+$var wire 1 B we_n $end
+$var wire 3 J row [2:0] $end
+$var wire 4 K col [3:0] $end
+$var parameter 32 L ADDR_WIDTH $end
+$var parameter 32 M BANK_WIDTH $end
+$var parameter 32 N COL_BITS $end
+$var parameter 32 O COL_POSE $end
+$var parameter 32 P DM_WIDTH $end
+$var parameter 32 Q DQ_WIDTH $end
+$var parameter 33 R NUM_BANKS $end
+$var parameter 32 S ROW_BITS $end
+$var parameter 32 T ROW_POSE $end
+$var parameter 69 U SIM_SIZE $end
+$var parameter 32 V tcas $end
+$var parameter 32 W trcd $end
+$var parameter 32 X trp $end
 $var reg 1 $ async_bs $end
-$var reg 1 D async_bs_next $end
+$var reg 1 Y async_bs_next $end
 $var reg 1 # barm $end
-$var reg 3 E bit_count [2:0] $end
-$var reg 1 F cas_fire $end
-$var reg 1 G dq_drive $end
-$var reg 16 H dq_next [15:0] $end
-$var reg 16 I dq_next1 [15:0] $end
-$var reg 16 J dq_out [15:0] $end
+$var reg 3 Z bit_count [2:0] $end
+$var reg 1 [ cas_fire $end
+$var reg 1 \ dq_drive $end
+$var reg 16 ] dq_next [15:0] $end
+$var reg 16 ^ dq_out [15:0] $end
 $var reg 1 " tdr_a $end
-$var reg 1 K tdr_req $end
-$var integer 32 L cas_delay [31:0] $end
-$var integer 32 M i [31:0] $end
-$var integer 32 N trcd_count [31:0] $end
-$var integer 32 O trp_count [31:0] $end
-$var integer 32 P w [31:0] $end
+$var reg 1 _ tdr_mode $end
+$var reg 1 ` tdr_req $end
+$var integer 32 a cas_delay [31:0] $end
+$var integer 32 b i [31:0] $end
+$var integer 32 c trcd_count [31:0] $end
+$var integer 32 d trp_count [31:0] $end
+$var integer 32 e w [31:0] $end
 $upscope $end
 $scope task activate $end
-$var reg 4 Q bank [3:0] $end
-$var reg 14 R row [13:0] $end
+$var reg 1 f bank $end
+$var reg 3 g row [2:0] $end
 $upscope $end
 $scope task precharge $end
-$var reg 4 S bank [3:0] $end
+$var reg 1 h bank $end
 $upscope $end
 $scope task read_mem $end
-$var reg 4 T bank [3:0] $end
-$var reg 1 U bit_armed $end
-$var reg 10 V col [9:0] $end
-$var reg 16 W sampled [15:0] $end
-$var integer 32 X beat [31:0] $end
+$var reg 1 i bank $end
+$var reg 4 j col [3:0] $end
+$var reg 3 k row [2:0] $end
 $upscope $end
 $scope task write_mem $end
-$var reg 4 Y bank [3:0] $end
-$var reg 10 Z col [9:0] $end
-$var reg 16 [ data [15:0] $end
+$var reg 1 l bank $end
+$var reg 4 m col [3:0] $end
+$var reg 16 n data [15:0] $end
+$var reg 3 o row [2:0] $end
 $upscope $end
 $upscope $end
 $enddefinitions $end
 $comment Show the parameter values. $end
 $dumpall
-b10 C
-b10 B
-b10 A
-b1000000000000 @
-b1110 ?
-b10000 >
-b10000 =
-b10 <
-b1010 ;
-b100 :
-b11000 9
+b10 X
+b10 W
+b10 V
+b100000 U
+b111 T
+b11 S
+b10 R
+b10000 Q
+b10 P
+b100 O
+b100 N
+b1 M
+b111 L
+b100000 .
+b111 -
+b11 ,
+b10 +
+b10000 *
+b10 )
+b100 (
+b100 '
+b1 &
+b111 %
 $end
 #0
 $dumpvars
-bx [
-bx Z
-bx Y
-bx X
-bx W
-bx V
-xU
-bx T
-bx S
-bx R
-bx Q
-bx P
-b0 O
-b0 N
-b10000 M
-b0 L
-0K
+bx o
+bx n
+bx m
+xl
+bx k
+bx j
+xi
+xh
+bx g
+xf
+bx e
+b0 d
+b0 c
+b10 b
+b0 a
+0`
+x_
+b0 ^
+bx ]
+0\
+x[
+b0 Z
+xY
+b0 K
 b0 J
-bx I
-bx H
-0G
-xF
-b0 E
-xD
-bz 8
-b0 7
-b0 6
-b0 5
-r2450863.354 4
-bx 3
-r10 2
-11
+bz I
+b0 H
+b0 G
+bx F
+r2450863.354 E
+bx D
+r10 C
+1B
+0A
+x@
+x?
+bx >
+x=
+x<
+1;
+0:
+bx 9
+b0 8
+x7
+bx 6
+15
+04
+13
+12
+x1
 00
-1/
-0.
-bx -
-b0 ,
-bx +
-1*
-0)
-1(
-1'
-b0 &
-b0 %
+b0 /
 0$
 0#
 0"
 bz !
 $end
 #2450868354
-0F
-b10000 M
-r1082744.598 4
-1)
+0[
+b10 b
+r1082744.598 E
+14
 #3533617952
-r75814.698 4
-0)
+r75814.698 E
+04
 #3609437650
-b10000 M
-r837834.523 4
-1)
+b10 b
+r837834.523 E
+14
 #4447277173
-r2260302.59 4
-0)
+r2260302.59 E
+04
 #6707584763
-b10000 M
-r3336542.44 4
-1)
+b10 b
+r3336542.44 E
+14
 #10044132203
-r851608.858 4
-0)
+r851608.858 E
+04
 #10895746061
-b10000 M
-r154620.712 4
-1)
+b10 b
+r154620.712 E
+14
 #11050371773
-r2163467.008 4
-0)
+r2163467.008 E
+04
 #13213843781
-b10000 M
-r2262289.662 4
-1)
+b10 b
+r2262289.662 E
+14
 #15476138443
-r3139694.828 4
-0)
+r3139694.828 E
+04
 #18615838271
-b10000 M
-r2660093.174 4
-1)
+b10 b
+r2660093.174 E
+14
 #21275936445
-r4141111 4
-0)
+r4141111 E
+04
 #25417052445
-b10000 M
-r3324901.096 4
-1)
+b10 b
+r3324901.096 E
+14
 #28741958541
-r4244498.646 4
-0)
+r4244498.646 E
+04
 #32986462187
-b1111001010 R
-b1 Q
-b11010100100100 +
-b1111001010 %
-b1111001010 5
-b1 &
-b1 6
-b0 3
-10
-r1664558.346 4
-1)
+b10 J
+b1010 K
+b10 g
+0f
+b11010100100100 6
+b101010 /
+b101010 G
+b0 D
+1A
+r1664558.346 E
+14
 #34651025533
-r1003647.767 4
-0)
-#35654678300
-0/
-0*
-r154326.824 4
-1)
-#35809010124
-r3354188.52 4
-0)
-#39163203644
-b10 N
-1/
-1*
-b11010100100100 [
-b1111001010 Z
-b1 Y
-r4180699.351 4
-1)
-#43343907995
-r1946188.548 4
-0)
-#45290101543
-b1 N
-r1657425.674 4
-1)
-#46947532217
-r2925021.424 4
-0)
-#49872558641
-b0 N
-r1586374.923 4
-1)
-#51458938564
-r380328.228 4
-0)
-#51839271792
+r4071618.265 E
+04
+#38722648798
+b0 J
+b10 K
+0;
+05
+b10 /
+b10 G
+r1003647.767 E
+14
+#39726301565
+r154326.824 E
+04
+#39880633389
+b10 c
+1;
+15
+b11010100100100 n
+b10 m
+b0 o
+0l
+r3354188.52 E
+14
+#43234826909
+r1735825.16 E
+04
+#44970657069
+b1 c
+r1946188.548 E
+14
+#46916850617
+r1657425.674 E
+04
+#48574281291
+b0 c
+r2925021.424 E
+14
+#51499307715
+r1586374.923 E
+04
+#53085687638
+r380328.228 E
+14
+#53466020866
+r849815.322 E
+04
+#54315841188
 b11010100100100 !
-b11010100100100 8
-1.
-b11010100100100 -
-01
-0'
-0*
-r849815.322 4
-1)
-#52689092114
-r837772.059 4
-0)
-#53526869173
+b11010100100100 I
+1:
+b11010100100100 9
+0B
+02
+05
+r837772.059 E
+14
+#55153618247
+r2238940.926 E
+04
+#57392564173
 bz !
-bz 8
-11
-1'
-1*
-0.
-b10 P
-b1111001010 V
-b1 T
-r2238940.926 4
-1)
-#55765815099
-r2422481.146 4
-0)
-#58188301245
-r3581428.963 4
-1)
-#61769735208
-r1322044.689 4
-0)
-#63091784897
-r1260404.498 4
-1)
-#64352194395
-r159627.56 4
-0)
-#64511826955
-0'
-0*
-r112998.697 4
-1)
-#64624830652
-r698865.437 4
-0)
-#65323701089
-b10 L
-1'
-1*
-0U
-b0 W
-b0 X
-r3047152.878 4
-1)
-#68370858967
-r1789274.887 4
-0)
-#70160138854
-b1 L
-1F
-r18303.787 4
-1)
-#70178447641
-r1465270.03 4
-0)
-#71643722671
-1$
-b110101 !
-b110101 8
-b0 L
-0F
+bz I
+1B
+12
+15
+0:
+b11010100100100 ]
+b10 e
+b10 j
+b0 k
+0i
+r1077617.43 E
+14
+#58470186603
+r3581428.963 E
+04
+#62051620566
+r1322044.689 E
+14
+#63373670255
+r1260404.498 E
+04
+#64634079753
+r159627.56 E
+14
+#64793712313
+r112998.697 E
+04
+#64906716010
+r698865.437 E
+14
+#65605586447
+r3047152.878 E
+04
+#68652744325
+17
+02
+05
+r1789274.887 E
+14
+#70442024212
+r18303.787 E
+04
+#70460332999
+1_
+b10 a
+12
+15
+1@
+b10 >
+0<
+0?
+0=
+b0 F
+01
+r1465270.03 E
+14
+#71925608029
+r2399135.995 E
+04
+#74324749024
+b1 a
+1[
+r1740993.288 E
+14
+#76065747312
+r2441365.754 E
+04
+#78507118066
+b11010100100100 !
+b11010100100100 I
+b0 a
+0[
 1#
-b110101 J
-1G
-b1 E
-0D
-b110101 I
-0K
-b110101 H
-r2399135.995 4
-1)
-#74042863666
+b11010100100100 ^
+1\
+b1 Z
+1Y
+bx ]
+0`
+r2231985.406 E
+14
+#80739108472
+r1702038.281 E
+04
+#82441151753
+bx !
+bx I
+0Y
+1$
+bx ^
+b10 F
+1=
+11
+r506547.489 E
+14
+#82947704242
 0$
-r1740993.288 4
-0)
-#75783861954
-1U
-b1 X
-b110101 W
-r2441365.754 4
-1)
-#78225232708
-0U
-r2231985.406 4
-0)
-#80457223114
-1U
-b10 X
-r1702038.281 4
-1)
-#82159266395
-0U
-r506547.489 4
-0)
-#82665818884
-1U
-b11 X
-r4184390.871 4
-1)
-#86850214755
+0h
+01
+0@
+0?
+0=
+b0 F
+r4184390.871 E
+04
+#87132100113
+0B
+0;
+05
+r3308151.016 E
+14
+#90440256129
+r2697245.429 E
+04
+#93137506558
+b10 d
+1B
+1;
+15
+r1816868.103 E
+14
+#94954379661
+r1149899.54 E
+04
+#96104284201
+b1 d
+r4123331.8 E
+14
+#100227621001
+r3674367.201 E
+04
+#103901993202
+b0 d
+r3813406.942 E
+14
+#107715405144
+r3608482.53 E
+04
+#111323892674
+r1584726.795 E
+14
+#112908624469
+r2500844.793 E
+04
+#115409474262
+r98016.042 E
+14
+#115507495304
+r949468.952 E
+04
+#116456969256
+r3270656.233 E
+14
+#119727630489
+r2817676.53 E
+04
+#122545312019
+r499933.473 E
+14
+#123045250492
+r2634429.174 E
+04
+#125679684666
+b100 J
+b101 K
+b100 g
+b101111010000001 6
+b1000101 /
+b1000101 G
+b1 D
+r1059271.446 E
+14
+#126738961112
+r4175010.519 E
+04
+#130913976631
+b0 J
+b100 K
+0;
+05
+b100 /
+b100 G
+r3969665.755 E
+14
+#134883647386
+r2971862.767 E
+04
+#137855515153
+b10 c
+1;
+15
+b101111010000001 n
+b100 m
+r2788555.507 E
+14
+#140644075660
+r3350831.336 E
+04
+#143994911996
+b1 c
+r4235045.078 E
+14
+#148229962074
+r1540186.38 E
+04
+#149770153454
+b0 c
+r1338267.408 E
+14
+#151108425862
+r779982.108 E
+04
+#151888412970
+r768327.964 E
+14
+#152656745934
+r3302897.385 E
+04
+#155959648319
+1:
+b101111010000001 9
+0B
+02
+05
+r615396.127 E
+14
+#156575049446
+r1747140.36 E
+04
+#158322194806
+1B
+12
+15
+0:
+b10 e
+b100 j
+r1811857.671 E
+14
+#160134057477
+r3407949.542 E
+04
+#163542012019
+r2250079.998 E
+14
+#165792097017
+r1630326.538 E
+04
+#167422428555
+02
+05
+r3830967.518 E
+14
+#171253401073
+r998398.743 E
+04
+#172251804816
+bz !
+bz I
+b0 Z
+0\
+b10 a
+12
+15
+b1 F
+1=
+11
+1@
+b100 >
+r2666720.501 E
+14
+#174918530317
