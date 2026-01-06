@@ -21,12 +21,12 @@ module tb_px_8gvtdr_hr_hdram #(
 
     // Clock with jitter
     reg clk = 0;
-    real base_period = 10.0; // 100 MHz
+    real base_period = 0.2; // 10.0=100 MHz 1.0=1 GHz 0.2=5GHz
     real jitter;
 
     always begin
-        jitter = ($urandom_range(-300,300)) * 0.001; // +/- 0.3ns
-        #(base_period/2.0 + jitter) clk = ~clk;
+        jitter = ($urandom_range(600) - 300) * 0.001; // +/- 300ps
+        #((base_period/2.0) + jitter) clk = ~clk;
     end
 
     // Signals
@@ -78,10 +78,11 @@ module tb_px_8gvtdr_hr_hdram #(
     reg read_bit_armed;
     reg [BANK_WIDTH-1:0] read_bank;
     reg [COL_BITS-1:0] read_col;
+    reg read_async_bit_done;
 
     always @(posedge clk) begin
-        $display("Read Start: %0d Read Done: %0d Bit Arm: %0d Read bit armed: %0d @%0t", read_start, read_done, bit_arm, read_bit_armed, $time);
         if (read_start && !read_done) begin
+            #1;
             if (bit_arm && !read_bit_armed) begin
                 read_samples[0] = dq;
                 bit_ackn = 1;
@@ -94,6 +95,7 @@ module tb_px_8gvtdr_hr_hdram #(
 
     always @(negedge clk) begin
         if (read_start && !read_done) begin
+            #1;
             if (read_bit_armed && tdr_a) begin
                 read_samples[2] = dq;
                 bit_ackn = 0;
@@ -112,9 +114,10 @@ module tb_px_8gvtdr_hr_hdram #(
 
     always @(*) begin
         if (read_start && !read_done) begin
-            if (read_bit_armed && async_bs) begin
+            if (read_bit_armed && async_bs && !read_async_bit_done) begin
                 read_samples[1] = dq;
                 read_bursts = read_bursts + 1;
+                read_async_bit_done = 1;
                 $display("Debug: Async burst 50d -> bank=%0d col=%0d data=0x%h @%0t", read_bursts, read_bank, read_col, read_samples[1], $time);
             end
         end
@@ -177,6 +180,7 @@ module tb_px_8gvtdr_hr_hdram #(
             read_bank = bank;
             read_col = col;
             read_start = 1;
+            read_async_bit_done = 0;
 
             // Wait for TDR beats
             wait (read_done || read_bursts >= 3);
@@ -192,6 +196,46 @@ module tb_px_8gvtdr_hr_hdram #(
                 $stop;
             end else begin
                 $display("Ok: Read bank=%0d col=%0d data=0x%h", bank, col, read_samples[0]);
+            end
+        end
+    endtask
+
+    task read_mem_tdr(input [BANK_WIDTH-1:0] bank, input [ROW_BITS-1:0] row, input [COL_BITS-1:0] col);
+        begin
+            repeat ($urandom_range(1,4)) @(posedge clk);
+
+            @(posedge clk);
+            ba <= bank; addr <= col; cs_n <= 0; ras_n <= 1; cas_n <= 0; we_n <= 1; ddr_mode_n <= 1;
+            @(posedge clk);
+            cs_n <= 1; cas_n <= 1;
+
+            read_samples[0] = 0;
+            read_samples[1] = 0;
+            read_samples[2] = 0;
+            bit_ackn = 0;
+            read_bursts = 0;
+            read_bit_armed = 0;
+            read_done = 0;
+            read_bank = bank;
+            read_col = col;
+            read_start = 1;
+            read_async_bit_done = 0;
+
+            // Wait for TDR beats
+            wait (read_done || read_bursts >= 3);
+
+            read_start = 0;
+            read_done = 0;
+            bit_ackn = 0;
+            read_bursts = 0;
+            read_bit_armed = 0;
+
+            if (read_samples[0] !== golden_mem[{bank,row,col}] || read_samples[1] !== golden_mem[{bank,row,col+2'd1}] || read_samples[2] !== golden_mem[{bank,row,col+2'd2}]) begin
+                $display("Error: Read mismatch bank=%0d row=%0d col=%0d exp=0x%h%h%h got=0x%h%h%h @%0t", bank, row, col, golden_mem[{bank,row,col}],
+                    golden_mem[{bank,row,col+2'd1}], golden_mem[{bank,row,col+2'd2}], read_samples[0], read_samples[1], read_samples[2], $time);
+                $stop;
+            end else begin
+                $display("Ok: Read bank=%0d col=%0d data=0x%h%h%h", bank, col, read_samples[0], read_samples[1], read_samples[2]);
             end
         end
     endtask
@@ -219,6 +263,7 @@ module tb_px_8gvtdr_hr_hdram #(
             activate(ba, addr[ROW_POSE-1:COL_POSE]);
             write_mem(ba, addr[ROW_POSE-1:COL_POSE], addr[COL_POSE-1:0], data);
             read_mem(ba, addr[ROW_POSE-1:COL_POSE], addr[COL_POSE-1:0]);
+            read_mem_tdr(ba, addr[ROW_POSE-1:COL_POSE], addr[COL_POSE-1:0]);
             precharge(ba);
 
             repeat ($urandom_range(2,8)) @(posedge clk);

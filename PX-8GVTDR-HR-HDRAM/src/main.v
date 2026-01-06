@@ -4,6 +4,8 @@
 // Licensed under the CERN-OHL-S v2 (https://cern-ohl.web.cern.ch).
 // You may redistribute and modify this file under the terms of the CERN-OHL-S v2.
 
+`timescale 1ns/1ps
+
 module px_8gvtdr_hr_hdram #(
     parameter DQ_WIDTH = 16,
     parameter ADDR_WIDTH = 7,
