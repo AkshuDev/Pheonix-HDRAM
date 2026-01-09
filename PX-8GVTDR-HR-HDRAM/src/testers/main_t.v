@@ -16,7 +16,7 @@ module tb_px_8gvtdr_hr_hdram #(
     parameter COL_BITS = 4, // 10 (Final)
     parameter ROW_POSE = 7, // Row Position End
     parameter COL_POSE = 4, // Column Position End
-    parameter SIM_SIZE = NUM_BANKS*(1<<COL_BITS) // SIM
+    parameter SIM_SIZE = NUM_BANKS*(1<<ROW_BITS)*(1<<COL_BITS) // SIM
 );
 
     // Clock with jitter
@@ -38,10 +38,9 @@ module tb_px_8gvtdr_hr_hdram #(
     reg [DM_WIDTH-1:0] dm;
 
     wire tdr_a;
-    wire async_bs;
     wire bit_arm;
+    reg send_bit_3;
     reg ddr_mode_n;
-    reg bit_ackn;
 
     reg [DQ_WIDTH-1:0] dq_drv;
     reg dq_oe;
@@ -61,10 +60,9 @@ module tb_px_8gvtdr_hr_hdram #(
         .dq(dq),
         .dm(dm),
         .tdr_a(tdr_a),
-        .async_bs(async_bs),
         .barm(bit_arm),
         .mddr_n(ddr_mode_n),
-        .backn(bit_ackn)
+        .sbt(send_bit_3)
     );
 
     // Golden memory
@@ -78,47 +76,45 @@ module tb_px_8gvtdr_hr_hdram #(
     reg read_bit_armed;
     reg [BANK_WIDTH-1:0] read_bank;
     reg [COL_BITS-1:0] read_col;
-    reg read_async_bit_done;
 
     always @(posedge clk) begin
         if (read_start && !read_done) begin
-            #1;
             if (bit_arm && !read_bit_armed) begin
+                #1;
                 read_samples[0] = dq;
-                bit_ackn = 1;
                 read_bit_armed = 1;
                 read_bursts = 1;
+                send_bit_3 = 1;
                 $display("Debug: Rising edge burst %0d -> bank=%0d col=%0d data=0x%h @%0t", read_bursts, read_bank, read_col, read_samples[0], $time);
             end
         end
     end
 
-    always @(negedge clk) begin
-        if (read_start && !read_done) begin
+    always @(posedge send_bit_3) begin
+        if (read_start && !read_done && read_bit_armed && ddr_mode_n) begin
             #1;
-            if (read_bit_armed && tdr_a) begin
+            read_samples[1] = dq;
+            read_bursts = read_bursts + 1;
+            send_bit_3 = 0;
+            $display("Debug: Async burst %0d -> bank=%0d col=%0d data=0x%h @%0t", read_bursts, read_bank, read_col, read_samples[1], $time);
+        end
+    end
+
+    always @(negedge clk) begin
+        if (read_start && !read_done && read_bit_armed) begin
+            send_bit_3 = 0;
+            if (tdr_a) begin
                 read_samples[2] = dq;
-                bit_ackn = 0;
                 read_bit_armed = 0;
                 read_bursts = read_bursts + 1;
                 read_done = 1;
                 $display("Debug: Falling edge burst %0d -> bank=%0d col=%0d data=0x%h mode=TDR @%0t", read_bursts, read_bank, read_col, read_samples[2], $time);
-            end else if (read_bit_armed && !tdr_a) begin
+            end else if (!tdr_a) begin
+                read_samples[1] = dq;
                 read_bursts = read_bursts + 1;
                 read_bit_armed = 0;
                 read_done = 1;
-                $display("Debug: Falling edge -> bank=%0d col=%0d mode=DDR @%0t", read_bank, read_col, $time);
-            end
-        end
-    end
-
-    always @(*) begin
-        if (read_start && !read_done) begin
-            if (read_bit_armed && async_bs && !read_async_bit_done) begin
-                read_samples[1] = dq;
-                read_bursts = read_bursts + 1;
-                read_async_bit_done = 1;
-                $display("Debug: Async burst 50d -> bank=%0d col=%0d data=0x%h @%0t", read_bursts, read_bank, read_col, read_samples[1], $time);
+                $display("Debug: Falling edge -> bank=%0d col=%0d data=0x%h mode=DDR @%0t", read_bank, read_col, read_samples[1], $time);
             end
         end
     end
@@ -150,7 +146,7 @@ module tb_px_8gvtdr_hr_hdram #(
     task write_mem(input [BANK_WIDTH-1:0] bank, input [ROW_BITS-1:0] row, input [COL_BITS-1:0] col, input [DQ_WIDTH-1:0] data);
         begin
             repeat ($urandom_range(1,3)) @(posedge clk);
-            golden_mem[{bank,col}] = data;
+            golden_mem[{bank, row, col}] = data;
 
             @(posedge clk);
             ba <= bank; addr <= col; cs_n <= 0; ras_n <= 1; cas_n <= 0; we_n <= 0;
@@ -173,21 +169,20 @@ module tb_px_8gvtdr_hr_hdram #(
             read_samples[0] = 0;
             read_samples[1] = 0;
             read_samples[2] = 0;
-            bit_ackn = 0;
+            send_bit_3 = 0;
             read_bursts = 0;
             read_bit_armed = 0;
             read_done = 0;
             read_bank = bank;
             read_col = col;
             read_start = 1;
-            read_async_bit_done = 0;
 
             // Wait for TDR beats
             wait (read_done || read_bursts >= 3);
 
             read_start = 0;
             read_done = 0;
-            bit_ackn = 0;
+            send_bit_3 = 0;
             read_bursts = 0;
             read_bit_armed = 0;
 
@@ -212,21 +207,20 @@ module tb_px_8gvtdr_hr_hdram #(
             read_samples[0] = 0;
             read_samples[1] = 0;
             read_samples[2] = 0;
-            bit_ackn = 0;
+            send_bit_3 = 0;
             read_bursts = 0;
             read_bit_armed = 0;
             read_done = 0;
             read_bank = bank;
             read_col = col;
             read_start = 1;
-            read_async_bit_done = 0;
 
             // Wait for TDR beats
             wait (read_done || read_bursts >= 3);
 
             read_start = 0;
             read_done = 0;
-            bit_ackn = 0;
+            send_bit_3 = 0;
             read_bursts = 0;
             read_bit_armed = 0;
 
