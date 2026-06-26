@@ -43,133 +43,53 @@ module px_8gvtdr_hr_hdram #(
 );
     reg [DQ_WIDTH-1:0] mem [0:SIM_SIZE-1];
 
-    reg [DQ_WIDTH-1:0] dq_tmp;
-    reg [DQ_WIDTH-1:0] dq_p1;
-    reg [DQ_WIDTH-1:0] dq_p2;
-    reg [DQ_WIDTH-1:0] dq_p3;
-    reg dq_drive; // Controls when the chip drives the DQ
-    reg dq_final_drive; // Secondry Control, allows Beat 3 to prevent dq drive and assign
+	reg dq_oe;
+	reg [DQ_WIDTH-1:0] dq_out;
 
-    reg [ROW_BITS-1:0] active_row [0:NUM_BANKS-1];
-    reg row_open [0:NUM_BANKS-1];
+	reg [DQ_WIDTH-1:0] dq_out_0;
+	reg [DQ_WIDTH-1:0] dq_out_1;
+	reg [DQ_WIDTH-1:0] dq_out_2;
+	reg dq_out_2_active;
 
-    wire [ROW_BITS-1:0] row;
-    wire [COL_BITS-1:0] col;
-    reg [ROW_BITS-1:0] latched_row;
-    reg [COL_BITS-1:0] latched_col;
-    reg [BANK_WIDTH-1:0] latched_ba;
-    assign row = addr[ROW_POSE-1:COL_POSE];
-    assign col = addr[COL_POSE-1:0];
+	assign dq = dq_oe ? dq_out : {DQ_WIDTH{1'bz}};
 
-    assign dq = (dq_drive && clk) ? // This logic went to crazy, too fast so i added a touch of beauty!
-                    !sbt ? 
-                        dq_p1
-                    : 
-                        dq_p2
-                :
-                    (dq_final_drive && !clk) ?
-                        dq_p3
-                    :
-                        {DQ_WIDTH{1'bz}};
+	always @(*) begin // Multiplexer
+		if (dq_out_2_active)
+			dq_out = dq_out_2;
+		else if (tdr_a)
+			dq_out = dq_out_1;
+		else
+			dq_out = dq_out_0;
+	end
 
-    // Timing
-    integer trcd_count, trp_count, cas_delay;
-    localparam trcd = 2, trp = 2, tcas = 2;
+	always @(posedge clk or negedge reset_n) begin // Control-Level-1 Transmistter (Highest Control)
+		if (!reset_n) begin
+			dq_out_0 <= {DQ_WIDTH{1'b0}};
+			barm <= 0;
+		end else if (dq_oe) begin // B0
+			barm <= 1;
+			dq_out_0 <= mem[...];
+		end
+	end
 
-    // Triple Data Rate
-    reg cas_fire;
-    wire tdr_mode;
-    assign tdr_mode = mddr_n ? 1 : 0;
+	always @(negedge clk or negedge reset_n) begin // Control-Level-2 Transmistter (Second Highest Control)
+		if (!reset_n) begin
+			dq_out_1 <= {DQ_WIDTH{1'b0}};
+		end else if (dq_oe) begin // B1
+			dq_out_1 <= mem[...];
 
-    integer i;
-    integer w;
-    always @(posedge clk or negedge reset_n) begin
-        if (!reset_n) begin
-            dq_p1 <= 0;
-            dq_p2 <= 0;
-            dq_p3 <= 0;
-            trcd_count <= 0;
-            trp_count <= 0;
-            cas_delay <= 0;
-            latched_row <= 0;
-            latched_col <= 0;
-            latched_ba <= 0;
-            dq_final_drive <= 0;
+			// Extra info
+			tdr_a <= sbt ? 0 : 1;
+			barm <= 0;
+		end
+	end
 
-            for (i = 0; i < NUM_BANKS; i=i+1) begin
-                row_open[i] <= 1'b0;
-                active_row[i] <= 0;
-            end
-        end else if (!cs_n) begin
-            if (!ras_n && cas_n && we_n) begin // Active CMD
-                row_open[ba] <= 1'b1;
-                active_row[ba] <= row;
-                latched_row <= row;
-                latched_col <= col;
-                latched_ba <= ba;
-                trcd_count <= trcd; // start timing
-            end else if (ras_n && !cas_n && we_n && row_open[ba] && trcd_count == 0) begin // Read CMD
-                cas_delay <= tcas;
-                latched_row <= row;
-                latched_col <= col;
-                latched_ba <= ba;
-                dq_drive <= 0;
-            end else if (ras_n && !cas_n && !we_n && row_open[ba] && trcd_count == 0) begin // Write CMD
-                dq_tmp = mem[{ba, row, col}];
-                for (w = 0; w < (DQ_WIDTH/8); w=w+1)
-                    if (!dm[w]) 
-                        dq_tmp[w*8 +: 8] = dq[w*8 +: 8];
-                mem[{ba, row, col}] <= dq_tmp;
-            end else if (!ras_n && cas_n && !we_n) begin // Precharge CMD
-                row_open[ba] <= 1'b0;
-                latched_row <= row;
-                latched_col <= col;
-                latched_ba <= ba;
-                trp_count <= trp;
-            end else begin
-                dq_drive <= 0;
-            end
-        end
+	always @(*) begin // Control-Level-3 Transmistter (Least Control)
+		dq_out_2_active = dq_oe && sbt;
 
-        if (trcd_count > 0) trcd_count <= trcd_count - 1;
-        if (trp_count > 0) trp_count <= trp_count - 1;
-
-        cas_fire <= (cas_delay - 1 == 1);
-        if (cas_delay > 0) begin
-            cas_delay <= cas_delay - 1;
-        end
-    end
-
-    always @(posedge clk or negedge reset_n) begin
-        if (!reset_n) begin
-            dq_drive <= 0;
-            barm <= 0;
-        end else if (cas_fire && row_open[ba]) begin
-            dq_drive <= 1;
-            dq_p1 <= mem[{latched_ba, latched_row, latched_col}];
-            barm <= 1;
-        end
-    end
-
-    always @(posedge cas_fire or posedge sbt) begin
-        if (cas_fire && tdr_mode && reset_n) begin
-            dq_p2 <= mem[{latched_ba, latched_row, latched_col + 2'd1}];
-        end
-    end
-
-    always @(negedge clk or negedge reset_n) begin
-        if (!reset_n) begin
-            tdr_a <= 0;
-        end else if (cas_fire) begin // TDR Mode
-            tdr_a <= tdr_mode ? 1 : 0;
-            dq_p3 <= tdr_mode ? mem[{latched_ba, latched_row, latched_col + 2'd2}] : mem[{latched_ba, latched_row, latched_col + 2'd1}];
-            dq_drive <= 0;
-            dq_final_drive <= 1;
-            
-            barm <= 0;
-        end else begin
-            dq_final_drive <= 0;
-            tdr_a <= 0;
-        end
-    end
+		if (dq_out_2_active)
+			dq_out_2 = mem[...];
+		else
+			dq_out_2 = {DQ_WIDTH{1'b0}};
+	end
 endmodule

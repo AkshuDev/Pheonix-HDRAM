@@ -93,7 +93,7 @@ module tb_px_8gvtdr_hr_hdram #(
     always @(posedge send_bit_3) begin
         if (read_start && !read_done && read_bit_armed && ddr_mode_n) begin
             #1;
-            read_samples[1] = dq;
+            read_samples[2] = dq;
             read_bursts = read_bursts + 1;
             send_bit_3 = 0;
             $display("Debug: Async burst %0d -> bank=%0d col=%0d data=0x%h @%0t", read_bursts, read_bank, read_col, read_samples[1], $time);
@@ -102,19 +102,15 @@ module tb_px_8gvtdr_hr_hdram #(
 
     always @(negedge clk) begin
         if (read_start && !read_done && read_bit_armed) begin
-            send_bit_3 = 0;
+            send_bit_3 <= 0;
+			read_samples[1] <= dq;
+			read_bit_armed <= 0;
+			read_bursts <= read_bursts + 1;
+			read_done <= 1;
             if (tdr_a) begin
-                read_samples[2] = dq;
-                read_bit_armed = 0;
-                read_bursts = read_bursts + 1;
-                read_done = 1;
-                $display("Debug: Falling edge burst %0d -> bank=%0d col=%0d data=0x%h mode=TDR @%0t", read_bursts, read_bank, read_col, read_samples[2], $time);
+                $display("Debug: Falling edge burst %0d -> bank=%0d col=%0d data=0x%h mode=TDR @%0t", read_bursts, read_bank, read_col, read_samples[1], $time);
             end else if (!tdr_a) begin
-                read_samples[1] = dq;
-                read_bursts = read_bursts + 1;
-                read_bit_armed = 0;
-                read_done = 1;
-                $display("Debug: Falling edge -> bank=%0d col=%0d data=0x%h mode=DDR @%0t", read_bank, read_col, read_samples[1], $time);
+                $display("Debug: Falling edge burst %0d -> bank=%0d col=%0d data=0x%h mode=DDR @%0t", read_bursts, read_bank, read_col, read_samples[1], $time);
             end
         end
     end
